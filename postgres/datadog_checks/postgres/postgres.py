@@ -7,10 +7,12 @@ import threading
 from contextlib import closing
 from time import time
 
+from ddtrace.profiling import Profiler
+
 import psycopg2
 from six import iteritems
 
-from datadog_checks.base import AgentCheck
+from datadog_checks.base import AgentCheck, is_affirmative
 from datadog_checks.base.utils.db.utils import resolve_db_host as agent_host_resolver
 from datadog_checks.postgres.metrics_cache import PostgresMetricsCache
 from datadog_checks.postgres.relationsmanager import INDEX_BLOAT, RELATION_METRICS, TABLE_BLOAT, RelationsManager
@@ -577,6 +579,9 @@ class PostgreSql(AgentCheck):
 
     def check(self, _):
         tags = copy.copy(self._config.tags)
+        if is_affirmative(os.environ.get('DD_PROFILING_ENABLED')):
+            prof = Profiler(service='{}_check'.format(self.name))
+            prof.start()
         # Collect metrics
         try:
             # Check version

@@ -3,6 +3,7 @@
 # Licensed under a 3-clause BSD style license (see LICENSE)
 from __future__ import division
 
+import os
 import re
 import time
 from collections import defaultdict
@@ -10,6 +11,7 @@ from itertools import chain
 
 import six
 from cachetools import TTLCache
+from ddtrace.profiling import Profiler
 
 from datadog_checks.base import AgentCheck, ConfigurationError
 from datadog_checks.base.config import is_affirmative
@@ -579,6 +581,10 @@ class SQLServer(AgentCheck):
         return cls(cfg_inst, base_name, metric_type, column, self.log)
 
     def check(self, _):
+        if is_affirmative(os.environ.get('DD_PROFILING_ENABLED')):
+            prof = Profiler(service='{}_check'.format(self.name))
+            prof.start()
+
         if self.do_check:
             self.load_static_information()
             if self.proc:
