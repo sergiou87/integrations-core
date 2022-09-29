@@ -2,10 +2,12 @@
 
 ## Overview
 
-The Win 32 event log check watches for Windows Event Logs and forwards them to Datadog. Enable this check to:
+The Win32 event log check watches for Windows Event Logs and forwards them to Datadog. Enable this check to:
 
 - Track system and application events in Datadog.
 - Correlate system and application events with the rest of your application.
+
+See the [Windows Event Logs documentation][13].
 
 ## Setup
 
@@ -15,34 +17,15 @@ The Windows Event Log check is included in the [Datadog Agent][1] package. There
 
 ### Configuration
 
-Windows Event logs can be collected as either of the following methods. The configuration for them are mutually exclusive.
+Windows Event logs can be collected as one or both of the following methods.
 - As [Datadog Events][15]
 - As [Datadog Logs][16]
 
-<!-- xxx tabs xxx -->
-<!-- xxx tab "Events" xxx -->
- 
-#### Event collection
+Both methods are configured in `win32_event_log.d/conf.yaml` in the `conf.d/` folder at the root of your [Agent's configuration directory][2]. See the [sample win32_event_log.d/conf.yaml][3] for all available configuration options.
 
-1. Edit the `win32_event_log.d/conf.yaml` in the `conf.d/` folder at the root of your [Agent's configuration directory][2]. See the [sample win32_event_log.d/conf.yaml][3] for all available configuration options.
+First, identify the Windows Event Log channels you want to monitor.
 
-2. [Restart the Agent][4] to start sending Windows events to Datadog.
-
-**Note**: Events and logs are configured separately. Logs are not configured within each instance. See [log collection](?tab=logs#logcollection), below, for configuring log collection.
-
-<!-- xxz tab xxx -->
-<!-- xxx tab "Logs" xxx -->
- 
-#### Log collection
-
-_Available for Agent versions >6.0_
-
-Log collection is disabled by default in the Datadog Agent; ensure to [activate log collection][14] (e.g. set `logs_enabled: true` in your `datadog.yaml` file) in order to collect Windows Event Logs as Datadog Logs.
-
-<!-- xxz tab xxx -->
-<!-- xxz tabs xxx -->
-
-To collect specific Windows Event Logs, add channels to the `conf.d/win32_event_log.d/conf.yaml` file manually, or use the Datadog Agent Manager. See the [Windows Event Logs documentation][13].
+#### List Windows Event channels
 
 To see a list of channels, run the following command in PowerShell:
 
@@ -60,7 +43,8 @@ This command displays channels in the format `LogMode MaximumSizeInBytes RecordC
 
 ```text
 LogMode  MaximumSizeInBytes RecordCount LogName 
-Circular 134217728          249896      Security
+Circular          134217728      249896 Security
+Circular            5242880        2932 <CHANNEL_2>
 ```
 
 The value under the column `LogName` is the name of the channel. In the above example, the channel name is `Security`.
@@ -73,16 +57,23 @@ Depending on collection method, the channel name can be used for the following c
 <!-- xxx tabs xxx -->
 <!-- xxx tab "Events" xxx -->
 
-Add channels to the `path` or `log_file` under the `instances:` section of your `win32_event_log.d/conf.yaml` configuration file. This example shows entries for the `Security` and `<CHANNEL_2>` channels:
+#### Event collection
+
+To collect Windows Event Logs as Datadog Events, configure channels under the `instances:` section of your `win32_event_log.d/conf.yaml` configuration file.
+
+The agent can be configured to collect Windows Event Logs as Datadog Events in two ways. Each method has its own configuration syntax for channels and for filters (see [Filtering Events](?tab=events#filtering-events)). The legacy method uses WMI and is the default mode for an instance. The newer method uses the Event Log API. We recommend using the Event Log API because it has better performance. To use the Event Log API collection method, set `legacy_mode: false` in each instance.
+
+This example shows entries for the `Security` and `<CHANNEL_2>` channels:
 
 ```yaml
 init_config:
 instances:
-  - # Legacy mode (default)
+  - # WMI - Legacy mode (default)
     legacy_mode: true
     log_file: Security
 
-  - path: Security 
+  - # Event Log API (better performance)
+    path: Security
     legacy_mode: false
     filters: {}
 
@@ -94,7 +85,13 @@ instances:
 <!-- xxz tab xxx -->
 <!-- xxx tab "Logs" xxx -->
 
-Add channels to the `logs:` section of your `win32_event_log.d/conf.yaml` configuration file. This example shows entries for the `Security` and `<CHANNEL_2>` channels:
+#### Log collection
+
+_Available for Agent versions >6.0_
+
+Log collection is disabled by default in the Datadog Agent; ensure to [activate log collection][14] (e.g. set `logs_enabled: true` in your `datadog.yaml` file) in order to collect Windows Event Logs as Datadog Logs.
+
+To collect Windows Event Logs as Datadog Logs, configure channels under the `logs:` section of your `win32_event_log.d/conf.yaml` configuration file. This example shows entries for the `Security` and `<CHANNEL_2>` channels:
 
 ```yaml
 logs:
@@ -105,7 +102,7 @@ logs:
 
   - type: windows_event
     channel_path: "<CHANNEL_2>"
-    source: "windows.events"
+    source: windows.events
     service: myservice
 ```
 
@@ -114,7 +111,7 @@ Set the corresponding `source` parameter to `windows.events` to benefit from the
 <!-- xxz tab xxx -->
 <!-- xxz tabs xxx -->
 
-Edit the `<CHANNEL_X>` parameters with the Windows channel name you want to collect events from.
+Edit the `<CHANNEL_2>` parameters with the Windows channel name you want to collect events from.
 
 Finally, [restart the Agent][4].
 
@@ -122,45 +119,45 @@ Finally, [restart the Agent][4].
 
 ### Filtering events
 
-Use the Windows Event Viewer GUI to list all the event logs available for capture with this integration.
-
-To determine the exact values, set your filters to use the following PowerShell command:
-
-```text
-Get-WmiObject -Class Win32_NTLogEvent
-```
-
-For example, to see the latest event logged in the `Security` log file, use:
-
-```text
-Get-WmiObject -Class Win32_NTLogEvent -Filter "LogFile='Security'" | select -First 1
-```
-
-The values listed in the output of the command can be set in `win32_event_log.d/conf.yaml` to capture the same kind of events.
-
-<div class="alert alert-info">
-The information given by the  <code> Get-EventLog</code> PowerShell command or the Windows Event ViewerGUI may slightly differ from <code>Get-WmiObject</code>.<br>
-Double-check your filters' values with <code>Get-WmiObject</code> if the integration doesn't capture the events you set up.
-</div>
-
 1. Configure one or more filters for the event log. A filter allows you to choose what log events you want to get into Datadog.
-
-  Filter on the following properties:
 
   <!-- xxx tabs xxx -->
   <!-- xxx tab "Events" xxx -->
 
+  Use the Windows Event Viewer GUI to list all the event logs available for capture with this integration.
+
+  To determine the exact values, set your filters to use the following PowerShell command:
+
+  ```text
+  Get-WmiObject -Class Win32_NTLogEvent
+  ```
+
+  For example, to see the latest event logged in the `Security` log file, use:
+
+  ```text
+  Get-WmiObject -Class Win32_NTLogEvent -Filter "LogFile='Security'" | select -First 1
+  ```
+
+  The values listed in the output of the command can be set in `win32_event_log.d/conf.yaml` to capture the same kind of events.
+
+  <div class="alert alert-info">
+  The information given by the  <code>Get-EventLog</code> PowerShell command or the Windows Event ViewerGUI may slightly differ from <code>Get-WmiObject</code>.<br>
+  Double-check your filters' values with <code>Get-WmiObject</code> if the integration doesn't capture the events you set up.
+  </div>
+
   Example legacy mode filters:
-    - log_file: Application, System, Setup, Security
-    - type: Critical, Error, Warning, Information, Audit Success, Audit Failure
-    - source_name: Any available source name
-    - event_id: Windows EventLog ID
+
+  - log_file: Application, System, Setup, Security
+  - type: Critical, Error, Warning, Information, Audit Success, Audit Failure
+  - source_name: Any available source name
+  - event_id: Windows EventLog ID
 
   Example non-legacy mode filters:
-    - path: Application, System, Setup, Security
-    - type: Critical, Error, Warning, Information, Success Audit, Failure Audit
-    - source: Any available source name
-    - id: event_id: Windows EventLog ID
+
+  - path: Application, System, Setup, Security
+  - type: Critical, Error, Warning, Information, Success Audit, Failure Audit
+  - source: Any available source name
+  - id: event_id: Windows EventLog ID
 
   See the [sample win32_event_log.d/conf.yaml][3] for all available filter options for respective modes.
 
@@ -193,7 +190,8 @@ Double-check your filters' values with <code>Get-WmiObject</code> if the integra
   ```yaml
   instances:
     # NON-LEGACY MODE
-    - path: System
+    - legacy_mode: false
+      path: System
       filters:
         source:
         - Microsoft-Windows-Ntfs
@@ -214,7 +212,7 @@ Double-check your filters' values with <code>Get-WmiObject</code> if the integra
   For each filter, add a log processing rule in the configuration file at `win32_event_log.d/conf.yaml`.
 
   Some example filters:
-  
+
   ```yaml
     - type: windows_event
       channel_path: Security
@@ -257,6 +255,8 @@ Double-check your filters' values with <code>Get-WmiObject</code> if the integra
   ```
 
   **Note**: the pattern may vary based on the format of the logs
+
+  To view the log content that your regex pattern will be matched against, use the `stream-logs` agent command. See [Agent Commands](https://docs.datadoghq.com/agent/guide/agent-commands) for more details.
 
   For more examples of filtering logs, see the [Advanced Log Collection documentation][12].
 
@@ -327,7 +327,7 @@ Need help? Contact [Datadog support][7].
 
 ### Documentation
 
-- [Add event log files to the `Win32_NTLogEvent` WMI class][8]
+- (Legacy) [Add event log files to the `Win32_NTLogEvent` WMI class][8]
 
 ### Blog
 
