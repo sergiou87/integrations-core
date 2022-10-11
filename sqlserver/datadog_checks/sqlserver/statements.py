@@ -71,7 +71,7 @@ qstats_aggr_split as (select
     convert(varbinary(64), substring(plan_handle_and_offsets, 1, 64)) as plan_handle,
     convert(int, convert(varbinary(4), substring(plan_handle_and_offsets, 64+1, 4))) as statement_start_offset,
     convert(int, convert(varbinary(4), substring(plan_handle_and_offsets, 64+6, 4))) as statement_end_offset,
-    * from qstats_aggr
+    * from qstats_aggr where last_execution_time > dateadd(second, -?, getdate())
 )
 select
     SUBSTRING(text, (statement_start_offset / 2) + 1,
@@ -253,7 +253,7 @@ class SqlserverStatementMetrics(DBMAsyncJob):
         self._statement_metrics_query = statements_query.format(
             query_metrics_columns=', '.join(available_columns),
             query_metrics_column_sums=', '.join(['sum({}) as {}'.format(c, c) for c in available_columns]),
-            # collection_interval=int(math.ceil(self.collection_interval) * 2),
+            collection_interval=int(math.ceil(self.collection_interval) * 2),
             limit=self.dm_exec_query_stats_row_limit,
         )
         return self._statement_metrics_query
@@ -267,9 +267,9 @@ class SqlserverStatementMetrics(DBMAsyncJob):
         if self._last_stats_query_time:
             query_interval = now - self._last_stats_query_time
         self._last_stats_query_time = now
-        # params = (math.ceil(query_interval),)
-        self.log.debug("Running query [%s] %s", statement_metrics_query)
-        cursor.execute(statement_metrics_query)
+        params = (math.ceil(query_interval),)
+        self.log.debug("Running query [%s] %s", statement_metrics_query, params)
+        cursor.execute(statement_metrics_query, params)
         columns = [i[0] for i in cursor.description]
         # construct row dicts manually as there's no DictCursor for pyodbc
         rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
