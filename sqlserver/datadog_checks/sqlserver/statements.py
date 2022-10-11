@@ -28,8 +28,6 @@ from datadog_checks.sqlserver.const import STATIC_INFO_ENGINE_EDITION, STATIC_IN
 
 DEFAULT_COLLECTION_INTERVAL = 10
 
-DEFAULT_COLLECTION_TIME = 86400  # one day
-DEFAULT_RUN_EXPENSIVE_QUERY_INTERVAL = 3600  # run the query to get all rows once an hour
 
 SQL_SERVER_QUERY_METRICS_COLUMNS = [
     "execution_count",
@@ -51,7 +49,6 @@ SQL_SERVER_QUERY_METRICS_COLUMNS = [
     "total_spills",
 ]
 
-LAST_EXE_FILTER = "where last_execution_time > dateadd(second, {query_interval_filter}, getdate())"
 
 STATEMENT_METRICS_QUERY = """\
 -- Gets raw data
@@ -80,7 +77,7 @@ qstats_aggr_split as (select
     convert(varbinary(64), substring(plan_handle_and_offsets, 1, 64)) as plan_handle,
     convert(int, convert(varbinary(4), substring(plan_handle_and_offsets, 64+1, 4))) as statement_start_offset,
     convert(int, convert(varbinary(4), substring(plan_handle_and_offsets, 64+6, 4))) as statement_end_offset,
-    * from qstats_aggr {last_exe_time_filter}
+    * from qstats_aggr where last_execution_time > dateadd(second, ?, getdate())
 )
 select
     SUBSTRING(text, (statement_start_offset / 2) + 1,
