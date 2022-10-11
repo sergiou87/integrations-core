@@ -58,7 +58,6 @@ with qstats as (
            (select value from sys.dm_exec_plan_attributes(plan_handle) where attribute = 'dbid') as dbid,
            {query_metrics_columns}
     from sys.dm_exec_query_stats
-    where last_execution_time > dateadd(second, -?, getdate())
 ),
 qstats_aggr as (
     select query_hash, query_plan_hash, CAST(S.dbid as int) as dbid,
@@ -254,7 +253,7 @@ class SqlserverStatementMetrics(DBMAsyncJob):
         self._statement_metrics_query = statements_query.format(
             query_metrics_columns=', '.join(available_columns),
             query_metrics_column_sums=', '.join(['sum({}) as {}'.format(c, c) for c in available_columns]),
-            collection_interval=int(math.ceil(self.collection_interval) * 2),
+            # collection_interval=int(math.ceil(self.collection_interval) * 2),
             limit=self.dm_exec_query_stats_row_limit,
         )
         return self._statement_metrics_query
@@ -268,9 +267,9 @@ class SqlserverStatementMetrics(DBMAsyncJob):
         if self._last_stats_query_time:
             query_interval = now - self._last_stats_query_time
         self._last_stats_query_time = now
-        params = (math.ceil(query_interval),)
-        self.log.debug("Running query [%s] %s", statement_metrics_query, params)
-        cursor.execute(statement_metrics_query, params)
+        # params = (math.ceil(query_interval),)
+        self.log.debug("Running query [%s] %s", statement_metrics_query)
+        cursor.execute(statement_metrics_query)
         columns = [i[0] for i in cursor.description]
         # construct row dicts manually as there's no DictCursor for pyodbc
         rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
