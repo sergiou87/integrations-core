@@ -49,6 +49,7 @@ SQL_SERVER_QUERY_METRICS_COLUMNS = [
 ]
 
 STATEMENT_METRICS_QUERY = """\
+-- Gets raw data
 with qstats as (
     select query_hash, query_plan_hash, last_execution_time,
             CONCAT(
@@ -59,14 +60,17 @@ with qstats as (
            {query_metrics_columns}
     from sys.dm_exec_query_stats
 ),
+-- aggregated data into sums & maps to max(last_execution_time) by query_hash, query_plan_hash, S.dbid, D.name 
 qstats_aggr as (
     select query_hash, query_plan_hash, CAST(S.dbid as int) as dbid,
        D.name as database_name, max(plan_handle_and_offsets) as plan_handle_and_offsets,
+       max(last_execution_time) as last_execution_time,
     {query_metrics_column_sums}
     from qstats S
     left join sys.databases D on S.dbid = D.database_id
     group by query_hash, query_plan_hash, S.dbid, D.name
 ),
+-- selects aggregated data (TOP 10000 rows) & only grabs queries that executed in the last 20s
 qstats_aggr_split as (select TOP {limit}
     convert(varbinary(64), substring(plan_handle_and_offsets, 1, 64)) as plan_handle,
     convert(int, convert(varbinary(4), substring(plan_handle_and_offsets, 64+1, 4))) as statement_start_offset,
